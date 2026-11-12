@@ -5,6 +5,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
+use unicode_width::UnicodeWidthStr;
 
 use crate::app::App;
 
@@ -37,7 +38,7 @@ pub fn draw(f: &mut Frame, app: &App, list_state: &mut ListState) {
 }
 
 fn draw_list(f: &mut Frame, app: &App, list_state: &mut ListState, area: Rect) {
-    let done_count = app.tasks.iter().filter(|t| t.done).count();
+    let done_count = app.tasks.iter().filter(|task| task.done).count();
     let title = format!(" Tasks ({}/{}) ", done_count, app.tasks.len());
     let block = Block::default()
         .title(Span::styled(
@@ -52,8 +53,8 @@ fn draw_list(f: &mut Frame, app: &App, list_state: &mut ListState, area: Rect) {
         .tasks
         .iter()
         .enumerate()
-        .map(|(i, task)| {
-            let selected = i == app.selected_index;
+        .map(|(index, task)| {
+            let selected = index == app.selected_index;
             let row_bg = if selected { SEL_BG } else { BG };
 
             let text_style = if selected {
@@ -74,8 +75,6 @@ fn draw_list(f: &mut Frame, app: &App, list_state: &mut ListState, area: Rect) {
             };
 
             let prefix = if selected { "▶ " } else { "  " };
-
-            // براکت‌ها همیشه بعد از متن تسک در انتهای خط می‌آیند
             let line = Line::from(vec![
                 Span::styled(prefix, Style::default().fg(LIGHT_BLUE).bg(row_bg)),
                 Span::styled(task.text.as_str(), text_style),
@@ -116,27 +115,34 @@ fn draw_input(f: &mut Frame, app: &App, area: Rect) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(LIGHT_BLUE))
         .style(Style::default().bg(BG));
-    let p = Paragraph::new(app.input_buffer.as_str())
+    let paragraph = Paragraph::new(app.input_buffer.as_str())
         .style(Style::default().fg(Color::White).bg(BG))
         .block(block);
-    f.render_widget(p, area);
+    f.render_widget(paragraph, area);
 
     let max_x = area.x + area.width.saturating_sub(2);
-    let x = (area.x + 1 + app.input_buffer.chars().count() as u16).min(max_x);
+    let text_width = UnicodeWidthStr::width(app.input_buffer.as_str());
+    let cursor_offset = u16::try_from(text_width).unwrap_or(u16::MAX);
+    let x = area.x.saturating_add(1).saturating_add(cursor_offset).min(max_x);
     f.set_cursor_position((x, area.y + 1));
 }
 
 fn draw_status(f: &mut Frame, app: &App, area: Rect) {
-    let (text, color) = if let Some(err) = &app.error {
-        (err.as_str(), Color::Red)
-    } else if app.input_mode {
-        ("Type task text, Enter to save, Esc to cancel", Color::Gray)
-    } else {
-        (
-            "Up/Down: Move | Tab: Toggle | a: Add | d: Delete | q: Quit",
+    let (text, color) = match (&app.error, app.input_mode) {
+        (Some(error), true) => (
+            format!("Enter: save | Esc: cancel | {error}"),
+            Color::Red,
+        ),
+        (Some(error), false) => (error.clone(), Color::Red),
+        (None, true) => (
+            "Type task text, Enter to save, Esc to cancel".to_string(),
             Color::Gray,
-        )
+        ),
+        (None, false) => (
+            "Up/Down: Move | Tab: Toggle | a: Add | d: Delete | q: Quit".to_string(),
+            Color::Gray,
+        ),
     };
-    let p = Paragraph::new(text).style(Style::default().fg(color).bg(BG));
-    f.render_widget(p, area);
+    let paragraph = Paragraph::new(text).style(Style::default().fg(color).bg(BG));
+    f.render_widget(paragraph, area);
 }
