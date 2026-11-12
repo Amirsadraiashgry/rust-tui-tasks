@@ -94,7 +94,7 @@ mod tests {
 
         save(&path, &tasks).expect("save tasks");
         assert_eq!(load(&path).expect("load tasks")[0].text, tasks[0].text);
-        assert_eq!(load(&path).expect("load tasks")[0].done, true);
+        assert!(load(&path).expect("load tasks")[0].done);
 
         fs::remove_file(path).expect("remove fixture");
     }
