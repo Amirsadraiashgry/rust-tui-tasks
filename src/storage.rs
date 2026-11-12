@@ -1,6 +1,6 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::app::Task;
 
@@ -12,7 +12,7 @@ pub fn default_path() -> PathBuf {
 }
 
 /// بارگذاری تسک‌ها؛ اگر فایل وجود نداشته باشد لیست خالی برمی‌گرداند.
-pub fn load(path: &PathBuf) -> io::Result<Vec<Task>> {
+pub fn load(path: &Path) -> io::Result<Vec<Task>> {
     if !path.exists() {
         return Ok(Vec::new());
     }
@@ -28,7 +28,7 @@ pub fn load(path: &PathBuf) -> io::Result<Vec<Task>> {
 
 /// ذخیره اتمیک: داده ابتدا در فایل موقت منحصربه‌فرد نوشته و sync می‌شود؛
 /// فقط پس از موفقیت کامل، فایل مقصد جایگزین خواهد شد.
-pub fn save(path: &PathBuf, tasks: &[Task]) -> io::Result<()> {
+pub fn save(path: &Path, tasks: &[Task]) -> io::Result<()> {
     let json = serde_json::to_vec_pretty(tasks)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
 
@@ -53,7 +53,7 @@ pub fn save(path: &PathBuf, tasks: &[Task]) -> io::Result<()> {
 static TEMP_FILE_COUNTER: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
 
-fn write_and_replace(temp_path: &PathBuf, path: &PathBuf, data: &[u8]) -> io::Result<()> {
+fn write_and_replace(temp_path: &Path, path: &Path, data: &[u8]) -> io::Result<()> {
     let mut file: File = OpenOptions::new()
         .write(true)
         .create_new(true)
