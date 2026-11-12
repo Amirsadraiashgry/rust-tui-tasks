@@ -168,7 +168,7 @@ mod tests {
 
         assert!(!app.input_mode);
         assert!(app.tasks.is_empty());
-        assert_eq!(fs::read(&path).expect("read original file"), original);
+        assert_eq!(fs::read(&path).expect("read original file").as_slice(), original);
 
         fs::remove_file(path).expect("remove fixture");
     }
