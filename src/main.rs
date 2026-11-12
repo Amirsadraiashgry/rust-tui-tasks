@@ -19,17 +19,31 @@ type Term = Terminal<CrosstermBackend<Stdout>>;
 fn setup_terminal() -> io::Result<Term> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
-    Terminal::new(CrosstermBackend::new(stdout))
+
+    if let Err(error) = execute!(stdout, EnterAlternateScreen) {
+        let _ = disable_raw_mode();
+        return Err(error);
+    }
+
+    match Terminal::new(CrosstermBackend::new(stdout)) {
+        Ok(terminal) => Ok(terminal),
+        Err(error) => {
+            let _ = disable_raw_mode();
+            let _ = execute!(io::stdout(), LeaveAlternateScreen);
+            Err(error)
+        }
+    }
 }
 
 fn restore_terminal() -> io::Result<()> {
-    disable_raw_mode()?;
-    execute!(io::stdout(), LeaveAlternateScreen)
+    // هر دو عملیات را مستقل انجام می‌دهیم تا شکست یکی مانع تلاش برای دیگری نشود.
+    let raw_mode_result = disable_raw_mode();
+    let screen_result = execute!(io::stdout(), LeaveAlternateScreen);
+    raw_mode_result.and(screen_result)
 }
 
 fn main() -> io::Result<()> {
-    // در صورت panic هم ترمینال به حالت اولیه برگردد
+    // در صورت panic هم ترمینال به حالت اولیه برگردد.
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let _ = restore_terminal();
@@ -40,9 +54,12 @@ fn main() -> io::Result<()> {
     let mut app = App::new(storage::default_path());
     let result = run(&mut terminal, &mut app);
 
-    restore_terminal()?;
-    terminal.show_cursor()?;
-    result
+    let restore_result = restore_terminal();
+    let cursor_result = terminal.show_cursor();
+
+    result?;
+    restore_result?;
+    cursor_result
 }
 
 fn run(terminal: &mut Term, app: &mut App) -> io::Result<()> {
@@ -51,11 +68,11 @@ fn run(terminal: &mut Term, app: &mut App) -> io::Result<()> {
 
     while !app.should_quit {
         if needs_draw {
-            terminal.draw(|f| ui::draw(f, app, &mut list_state))?;
+            terminal.draw(|frame| ui::draw(frame, app, &mut list_state))?;
             needs_draw = false;
         }
 
-        // poll با timeout تا CPU مصرف نشود
+        // poll با timeout تا CPU مصرف نشود.
         if !event::poll(Duration::from_millis(100))? {
             continue;
         }
@@ -85,7 +102,7 @@ fn handle_key(app: &mut App, code: KeyCode, mods: KeyModifiers) {
             KeyCode::Backspace => {
                 app.input_buffer.pop();
             }
-            KeyCode::Char(c) => app.input_buffer.push(c),
+            KeyCode::Char(character) => app.input_buffer.push(character),
             _ => {}
         }
         return;
